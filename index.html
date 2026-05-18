@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English Daily Routine App (Updated)</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-slate-50 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useMemo } = React;
+
+        // --- アイコンコンポーネント (FontAwesomeのラッパー) ---
+        const Mic = ({className, size, color}) => <i className={`fas fa-microphone ${className || ''}`} style={{fontSize: size, color: color}}></i>;
+        const Volume2 = ({className, size, color}) => <i className={`fas fa-volume-up ${className || ''}`} style={{fontSize: size, color: color}}></i>;
+        const ArrowRight = ({className}) => <i className={`fas fa-arrow-right ${className || ''}`}></i>;
+        const Play = ({className}) => <i className={`fas fa-play ${className || ''}`}></i>;
+        const CheckCircle = ({className, size, color}) => <i className={`fas fa-check-circle ${className || ''}`} style={{fontSize: size, color: color}}></i>;
+        const XCircle = ({className, size, color}) => <i className={`fas fa-times-circle ${className || ''}`} style={{fontSize: size, color: color}}></i>;
+        const Gift = ({className, size, color}) => <i className={`fas fa-gift ${className || ''}`} style={{fontSize: size, color: color}}></i>;
+        const SkipForward = ({className, size}) => <i className={`fas fa-step-forward ${className || ''}`} style={{fontSize: size}}></i>;
+        const Clock = ({className, size, color}) => <i className={`far fa-clock ${className || ''}`} style={{fontSize: size, color: color}}></i>;
+
+        // --- データ定義 ---
+        const NUMBERS = [
+          { val: 15, text: "fifteen", targets: ["15", "fifteen"] },
+          { val: 20, text: "twenty", targets: ["20", "twenty"] },
+          { val: 25, text: "twenty-five", targets: ["25", "twenty five", "twenty-five"] },
+          { val: 30, text: "thirty", targets: ["30", "thirty"] },
+          { val: 35, text: "thirty-five", targets: ["35", "thirty five", "thirty-five"] },
+          { val: 40, text: "forty", targets: ["40", "forty"] },
+          { val: 45, text: "forty-five", targets: ["45", "forty five", "forty-five"] },
+          { val: 50, text: "fifty", targets: ["50", "fifty"] },
+          { val: 55, text: "fifty-five", targets: ["55", "fifty five", "fifty-five"] }
+        ];
+
+        // 教科書ベースで単語を追加
+        const ROUTINES = [
+          { en: "get up", ja: "起きる" },
+          { en: "wash my face", ja: "顔を洗う" },
+          { en: "go to school", ja: "学校へ行く" },
+          { en: "eat breakfast", ja: "朝食を食べる" },
+          { en: "study", ja: "勉強する" },
+          { en: "eat lunch", ja: "昼食を食べる" },
+          { en: "go home", ja: "家に帰る" },
+          { en: "do my homework", ja: "宿題をする" },
+          { en: "play with my friends", ja: "友達と遊ぶ" },
+          { en: "eat dinner", ja: "夕食を食べる" },
+          { en: "go to bed", ja: "寝る" },
+          { en: "clean my room", ja: "部屋を掃除する" },
+          { en: "take a bath", ja: "お風呂に入る" },
+          { en: "play video games", ja: "テレビゲームをする" },
+          { en: "walk my dog", ja: "犬の散歩をする" },
+          { en: "cook breakfast", ja: "朝食を作る" }
+        ];
+
+        // 教科書の頻度・時間の文章データを追加
+        const SENTENCES = [
+          { en: "always", ja: "いつも", hint: "100%", targets: ["always"] },
+          { en: "usually", ja: "たいてい", hint: "80%", targets: ["usually"] },
+          { en: "sometimes", ja: "ときどき", hint: "50%", targets: ["sometimes"] },
+          { en: "never", ja: "ぜんぜん〜ない", hint: "0%", targets: ["never"] },
+          { en: "I get up at 6:30.", ja: "私は6時30分に起きます。", hint: "時間", targets: ["i get up at 630", "i get up at 6 30", "i get up at six thirty"] },
+          { en: "What time do you eat dinner?", ja: "あなたは何時に夕食を食べますか。", hint: "質問", targets: ["what time do you eat dinner"] },
+          { en: "I eat dinner at 7:00.", ja: "私は7時に夕食を食べます。", hint: "時間", targets: ["i eat dinner at 7", "i eat dinner at seven", "i eat dinner at 700", "i eat dinner at 7 o'clock"] },
+          { en: "I usually get up at 6:30.", ja: "私はたいてい6時30分に起きます。", hint: "頻度＋時間", targets: ["i usually get up at 630", "i usually get up at 6 30", "i usually get up at six thirty"] },
+          { en: "I sometimes cook breakfast.", ja: "私はときどき朝食を作ります。", hint: "頻度", targets: ["i sometimes cook breakfast"] }
+        ];
+
+        const INITIAL_MONSTERS = [
+          { emoji: "🧚", name: "風精シルフ" }, { emoji: "🧞", name: "ランプの魔神" }, { emoji: "🧜", name: "水の歌姫" },
+          { emoji: "🧝", name: "森の狩人" }, { emoji: "🧙", name: "大魔導士" }, { emoji: "🧛", name: "吸血公爵" },
+          { emoji: "🧟", name: "不死のゾンビ" }, { emoji: "🦸", name: "伝説の勇者" }, { emoji: "🦹", name: "暗黒騎士" },
+          { emoji: "👻", name: "さまよう亡霊" }, { emoji: "👹", name: "紅蓮の鬼神" }, { emoji: "👺", name: "疾風の天狗" },
+          { emoji: "👽", name: "宇宙の旅人" }, { emoji: "👾", name: "次元インベーダー" }, { emoji: "🤖", name: "古代ゴーレム" },
+          { emoji: "🎃", name: "パンプキン王" }, { emoji: "🐉", name: "神竜バハムート" }, { emoji: "🦄", name: "聖獣ユニコーン" },
+          { emoji: "🦖", name: "暴君ティラノ" }, { emoji: "🐙", name: "海魔クラーケン" }, { emoji: "🦇", name: "闇夜のコウモリ" },
+          { emoji: "🦉", name: "知恵のフクロウ" }, { emoji: "🐺", name: "氷狼フェンリル" }, { emoji: "🐍", name: "猛毒バジリスク" },
+          { emoji: "🕷️", name: "魔眼スパイダー" }, { emoji: "🦂", name: "砂漠のサソリ" }, { emoji: "🦅", name: "天空のワシ" },
+          { emoji: "🦈", name: "深海のサメ" }, { emoji: "🐊", name: "沼地のワニ" }, { emoji: "🦍", name: "剛腕コング" }
+        ];
+
+        // --- ユーティリティ関数 ---
+        const shuffleArray = (array) => {
+          const newArr = [...array];
+          for (let i = newArr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+          }
+          return newArr;
+        };
+
+        const normalizeText = (text) => {
+          // 数字を残すように変更 (コロンなどもスペースに変換して取り除く)
+          return text.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+        };
+
+        const checkSpeechMatch = (recognizedText, targets) => {
+          const normalizedRec = normalizeText(recognizedText);
+          return targets.some(target => {
+            const normalizedTarget = normalizeText(String(target));
+            return normalizedRec === normalizedTarget || normalizedRec.includes(normalizedTarget);
+          });
+        };
+
+        // --- カスタムフック: 音声合成 (読み上げ) ---
+        const useTextToSpeech = () => {
+          const speak = useCallback((text) => {
+            if (!window.speechSynthesis) return;
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            utterance.rate = 0.85; // 少しゆっくりめに調整
+            window.speechSynthesis.speak(utterance);
+          }, []);
+          return speak;
+        };
+
+        // --- カスタムフック: 音声認識 (マイク入力) ---
+        const useSpeechRecognition = (targets, onSuccess) => {
+          const [isListening, setIsListening] = useState(false);
+          const [transcript, setTranscript] = useState("");
+          const [message, setMessage] = useState("");
+          const [errorCount, setErrorCount] = useState(0);
+
+          const targetsKey = JSON.stringify(targets);
+          useEffect(() => {
+            setErrorCount(0);
+          }, [targetsKey]);
+
+          const startListening = useCallback(() => {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+              setMessage("お使いのブラウザは音声入力に対応していません。スキップボタンを使ってね。");
+              setErrorCount(5);
+              return;
+            }
+            
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            recognition.onstart = () => {
+              setIsListening(true);
+              setTranscript("");
+              setMessage("マイクに向かって話してね...");
+            };
+
+            recognition.onresult = (event) => {
+              const result = event.results[0][0].transcript;
+              setTranscript(result);
+              
+              let matchTargets = Array.isArray(targets) ? targets : [targets];
+              
+              if (checkSpeechMatch(result, matchTargets)) {
+                setMessage("⭕ グッドジョブ！");
+                setIsListening(false);
+                setErrorCount(0);
+                onSuccess();
+              } else {
+                setMessage(`「${result}」と聞こえたよ。もう一度挑戦！`);
+                setIsListening(false);
+                setErrorCount(prev => prev + 1);
+              }
+            };
+
+            recognition.onerror = (e) => {
+              console.error(e);
+              setMessage("エラーが起きました。もう一度ボタンを押してね。");
+              setIsListening(false);
+              setErrorCount(prev => prev + 1);
+            };
+
+            recognition.onend = () => {
+              setIsListening(false);
+            };
+
+            recognition.start();
+          }, [targets, onSuccess]);
+
+          return { isListening, transcript, message, startListening, setMessage, errorCount };
+        };
+
+
+        // ==========================================
+        // メインアプリケーションコンポーネント
+        // ==========================================
+        function App() {
+          const [phase, setPhase] = useState(0);
+          const [currentIndex, setCurrentIndex] = useState(0);
+          
+          const [gameScore, setGameScore] = useState(0);
+          const [usedGachaTokens, setUsedTokens] = useState(0);
+          const [collectedMonsters, setCollectedMonsters] = useState([]);
+          const [gachaPool, setGachaPool] = useState(shuffleArray(INITIAL_MONSTERS));
+          
+          const [showGachaModal, setShowGachaModal] = useState(false);
+          const [currentGachaResult, setCurrentGachaResult] = useState(null);
+          const [isGachaRolling, setIsGachaRolling] = useState(false);
+
+          const [currentOrder, setCurrentOrder] = useState([]);
+
+          const totalTokens = Math.floor(gameScore / 5);
+          const availableTokens = totalTokens - usedGachaTokens;
+
+          const startPhase1 = () => { setCurrentIndex(0); setPhase(1); };
+          const startPhase2 = () => { setCurrentOrder(shuffleArray(ROUTINES).slice(0, 5)); setCurrentIndex(0); setPhase(2); };
+          const startPhase3 = () => { setCurrentOrder(shuffleArray(ROUTINES).slice(0, 5)); setCurrentIndex(0); setPhase(3); };
+          const startPhase4 = () => { setCurrentOrder(shuffleArray(SENTENCES)); setCurrentIndex(0); setPhase(4); };
+          const startPhase5 = () => { setPhase(5); generateNextGameTask(); };
+
+          const [gameTask, setGameTask] = useState(null);
+
+          const generateNextGameTask = useCallback(() => {
+            const taskType = Math.floor(Math.random() * 4); // 4種類のタスクからランダム
+            
+            if (taskType === 0) {
+              const target = NUMBERS[Math.floor(Math.random() * NUMBERS.length)];
+              setGameTask({ type: 'number_speech', data: target });
+            } else if (taskType === 1) {
+              const target = ROUTINES[Math.floor(Math.random() * ROUTINES.length)];
+              const incorrects = ROUTINES.filter(r => r.en !== target.en).sort(() => 0.5 - Math.random()).slice(0, 3);
+              const options = shuffleArray([target, ...incorrects]);
+              setGameTask({ type: 'routine_listen', data: target, options });
+            } else if (taskType === 2) {
+              const target = ROUTINES[Math.floor(Math.random() * ROUTINES.length)];
+              setGameTask({ type: 'routine_speech', data: target });
+            } else {
+              // 新しいタスク：文章・頻度のスピーチ
+              const target = SENTENCES[Math.floor(Math.random() * SENTENCES.length)];
+              setGameTask({ type: 'sentence_speech', data: target });
+            }
+          }, []);
+
+          const handleGameTaskSuccess = useCallback(() => {
+            setGameScore(prev => prev + 1);
+            generateNextGameTask();
+          }, [generateNextGameTask]);
+
+          const handleGacha = () => {
+            if (availableTokens > 0 && gachaPool.length > 0) {
+              setIsGachaRolling(true);
+              setShowGachaModal(true);
+              
+              setTimeout(() => {
+                const newMonster = gachaPool[0];
+                const newPool = gachaPool.slice(1);
+                
+                setGachaPool(newPool);
+                setCollectedMonsters(prev => [...prev, newMonster]);
+                setUsedTokens(prev => prev + 1);
+                setCurrentGachaResult(newMonster);
+                setIsGachaRolling(false);
+              }, 2000);
+            }
+          };
+
+          const SkipButton = ({ onSkip }) => (
+            <button onClick={onSkip} className="mt-8 text-sm text-gray-400 hover:text-gray-600 flex items-center justify-center w-full">
+              <SkipForward size={16} className="mr-2" />
+              音声認識がうまくいかない場合はここを押してパス
+            </button>
+          );
+
+          // -----------------------
+          // 各フェーズのレンダリング関数
+          // -----------------------
+
+          const RenderPhase1 = () => {
+            const currentNumber = NUMBERS[currentIndex];
+            const [isCleared, setIsCleared] = useState(false);
+            const { isListening, transcript, message, startListening, setMessage, errorCount } = useSpeechRecognition(currentNumber.targets, () => setIsCleared(true));
+            const speak = useTextToSpeech();
+
+            useEffect(() => { speak(currentNumber.text); }, [currentIndex, currentNumber, speak]);
+
+            const handleNext = () => {
+              setIsCleared(false); setMessage("");
+              if (currentIndex + 1 < NUMBERS.length) setCurrentIndex(currentIndex + 1);
+              else startPhase2();
+            };
+
+            return (
+              <div className="flex flex-col items-center max-w-lg mx-auto bg-white p-8 rounded-2xl shadow-xl">
+                <h2 className="text-2xl font-bold text-blue-600 mb-6">ステップ1：数字を英語で言ってみよう！</h2>
+                <div className="text-8xl font-black text-gray-800 mb-2">{currentNumber.val}</div>
+                <div className="text-xl text-gray-500 mb-8">{currentNumber.text}</div>
+                {!isCleared ? (
+                  <div className="flex flex-col items-center w-full">
+                    <button onClick={startListening} className={`p-6 rounded-full shadow-lg transition-transform transform hover:scale-105 ${isListening ? 'bg-red-500 animate-pulse' : 'bg-blue-500 hover:bg-blue-600'}`}>
+                      <Mic size={48} color="white" />
+                    </button>
+                    <p className="mt-6 text-lg font-medium text-gray-700 min-h-[2rem] text-center">{message}</p>
+                    {errorCount >= 5 && <SkipButton onSkip={() => setIsCleared(true)} />}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center w-full animate-in fade-in duration-300">
+                    <CheckCircle size={64} className="text-green-500 mb-4" />
+                    <p className="text-2xl font-bold text-green-600 mb-6">すばらしい！</p>
+                    <button onClick={handleNext} className="w-full py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xl font-bold flex items-center justify-center">
+                      次へ <ArrowRight className="ml-2" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          };
+
+          const RenderPhase2 = () => {
+            const targetRoutine = currentOrder[currentIndex];
+            const speak = useTextToSpeech();
+            const [options, setOptions] = useState([]);
+            const [selectedOption, setSelectedOption] = useState(null);
+            const [isCorrect, setIsCorrect] = useState(false);
+
+            useEffect(() => {
+              if (!targetRoutine) return;
+              const incorrects = ROUTINES.filter(r => r.en !== targetRoutine.en).sort(() => 0.5 - Math.random()).slice(0, 3);
+              setOptions(shuffleArray([targetRoutine, ...incorrects]));
+              setSelectedOption(null); setIsCorrect(false);
+              speak(targetRoutine.en);
+            }, [currentIndex, targetRoutine, speak]);
+
+            const handleSelect = (option) => {
+              if (selectedOption) return;
+              setSelectedOption(option);
+              if (option.en === targetRoutine.en) setIsCorrect(true);
+            };
+
+            const handleNext = () => {
+              if (currentIndex + 1 < currentOrder.length) setCurrentIndex(currentIndex + 1);
+              else startPhase3();
+            };
+
+            if (!targetRoutine) return null;
+
+            return (
+              <div className="flex flex-col items-center max-w-2xl mx-auto bg-white p-8 rounded-2xl shadow-xl">
+                <h2 className="text-2xl font-bold text-orange-500 mb-6">ステップ2：英語を聞いて、意味を選ぼう！</h2>
+                <button onClick={() => speak(targetRoutine.en)} className="p-6 bg-orange-100 hover:bg-orange-200 rounded-full shadow-md mb-4 transition-transform hover:scale-105 text-orange-600">
+                  <Volume2 size={48} />
+                </button>
+                <p className="text-4xl font-black text-orange-600 mb-8 text-center">{targetRoutine.en}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full mb-8">
+                  {options.map((opt, idx) => {
+                    let btnClass = "py-4 px-6 rounded-xl text-lg font-bold border-2 transition-all ";
+                    if (!selectedOption) btnClass += "border-gray-200 hover:border-orange-400 hover:bg-orange-50 text-gray-700";
+                    else if (opt.en === targetRoutine.en) btnClass += "border-green-500 bg-green-100 text-green-700";
+                    else if (opt === selectedOption) btnClass += "border-red-500 bg-red-100 text-red-700";
+                    else btnClass += "border-gray-200 bg-gray-50 text-gray-400 opacity-50";
+
+                    return (
+                      <button key={idx} onClick={() => handleSelect(opt)} disabled={!!selectedOption} className={btnClass}>
+                        {opt.ja}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedOption && (
+                  <div className="w-full flex flex-col items-center animate-in fade-in duration-300">
+                    {isCorrect ? (
+                      <p className="text-xl font-bold text-green-600 mb-4 flex items-center"><CheckCircle className="mr-2"/> 正解！</p>
+                    ) : (
+                      <p className="text-xl font-bold text-red-500 mb-4 flex items-center"><XCircle className="mr-2"/> 残念！正解は「{targetRoutine.ja}」でした</p>
+                    )}
+                    <button onClick={handleNext} className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xl font-bold flex items-center justify-center">
+                      次へ <ArrowRight className="ml-2" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          };
+
+          const RenderPhase3 = () => {
+            const targetRoutine = currentOrder[currentIndex];
+            const [isCleared, setIsCleared] = useState(false);
+            const { isListening, transcript, message, startListening, setMessage, errorCount } = useSpeechRecognition([targetRoutine?.en], () => setIsCleared(true));
+            const speak = useTextToSpeech();
+
+            useEffect(() => { if (targetRoutine) speak(targetRoutine.en); }, [currentIndex, targetRoutine, speak]);
+
+            const handleNext = () => {
+              setIsCleared(false); setMessage("");
+              if (currentIndex + 1 < currentOrder.length) setCurrentIndex(currentIndex + 1);
+              else startPhase4();
+            };
+
+            if (!targetRoutine) return null;
+
+            return (
+              <div className="flex flex-col items-center max-w-lg mx-auto bg-white p-8 rounded-2xl shadow-xl">
+                <h2 className="text-2xl font-bold text-purple-600 mb-6">ステップ3：日課を英語で言ってみよう！</h2>
+                <div className="text-center mb-8">
+                  <p className="text-2xl font-bold text-gray-800 mb-2">{targetRoutine.ja}</p>
+                  <div className="flex items-center justify-center space-x-3">
+                    <p className="text-3xl font-black text-purple-700">{targetRoutine.en}</p>
+                    <button onClick={() => speak(targetRoutine.en)} className="p-3 text-purple-500 hover:bg-purple-100 rounded-full">
+                      <Volume2 size={24} />
+                    </button>
+                  </div>
+                </div>
+                {!isCleared ? (
+                  <div className="flex flex-col items-center w-full">
+                    <button onClick={startListening} className={`p-6 rounded-full shadow-lg transition-transform transform hover:scale-105 ${isListening ? 'bg-red-500 animate-pulse' : 'bg-purple-500 hover:bg-purple-600'}`}>
+                      <Mic size={48} color="white" />
+                    </button>
+                    <p className="mt-6 text-lg font-medium text-gray-700 min-h-[2rem] text-center">{message}</p>
+                    {errorCount >= 5 && <SkipButton onSkip={() => setIsCleared(true)} />}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center w-full animate-in fade-in duration-300">
+                    <CheckCircle size={64} className="text-green-500 mb-4" />
+                    <p className="text-2xl font-bold text-green-600 mb-6">パーフェクト！</p>
+                    <button onClick={handleNext} className="w-full py-4 bg-purple-500 hover:bg-purple-600 text-white rounded-xl text-xl font-bold flex items-center justify-center">
+                      次へ <ArrowRight className="ml-2" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          };
+
+          // 新しいフェーズ：時間と頻度に関する文章練習
+          const RenderPhase4 = () => {
+            const targetSentence = currentOrder[currentIndex];
+            const [isCleared, setIsCleared] = useState(false);
+            const { isListening, transcript, message, startListening, setMessage, errorCount } = useSpeechRecognition(targetSentence?.targets, () => setIsCleared(true));
+            const speak = useTextToSpeech();
+
+            useEffect(() => { if (targetSentence) speak(targetSentence.en); }, [currentIndex, targetSentence, speak]);
+
+            const handleNext = () => {
+              setIsCleared(false); setMessage("");
+              if (currentIndex + 1 < currentOrder.length) setCurrentIndex(currentIndex + 1);
+              else startPhase5(); // エンドレスへ
+            };
+
+            if (!targetSentence) return null;
+
+            return (
+              <div className="flex flex-col items-center max-w-xl mx-auto bg-white p-8 rounded-2xl shadow-xl border-t-8 border-teal-500">
+                <h2 className="text-2xl font-bold text-teal-600 mb-2">ステップ4：頻度や時間を言ってみよう！</h2>
+                <p className="text-gray-500 mb-6 font-medium">長い文章にもチャレンジ！</p>
+                <div className="text-center mb-8 w-full bg-teal-50 p-6 rounded-xl border border-teal-100">
+                  <div className="inline-block bg-teal-600 text-white text-sm px-3 py-1 rounded-full mb-3">{targetSentence.hint}</div>
+                  <p className="text-xl font-bold text-gray-800 mb-4">{targetSentence.ja}</p>
+                  <div className="flex flex-col items-center justify-center space-y-2">
+                    <p className="text-2xl md:text-3xl font-black text-teal-700 break-words text-center">{targetSentence.en}</p>
+                    <button onClick={() => speak(targetSentence.en)} className="p-3 text-teal-600 hover:bg-teal-100 rounded-full mt-2 transition">
+                      <Volume2 size={28} />
+                    </button>
+                  </div>
+                </div>
+                {!isCleared ? (
+                  <div className="flex flex-col items-center w-full">
+                    <button onClick={startListening} className={`p-6 rounded-full shadow-lg transition-transform transform hover:scale-105 ${isListening ? 'bg-red-500 animate-pulse' : 'bg-teal-500 hover:bg-teal-600'}`}>
+                      <Mic size={48} color="white" />
+                    </button>
+                    <p className="mt-6 text-lg font-medium text-gray-700 min-h-[2rem] text-center">{message}</p>
+                    {errorCount >= 5 && <SkipButton onSkip={() => setIsCleared(true)} />}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center w-full animate-in fade-in duration-300">
+                    <CheckCircle size={64} className="text-green-500 mb-4" />
+                    <p className="text-2xl font-bold text-green-600 mb-6">すごい！よく言えたね！</p>
+                    <button onClick={handleNext} className="w-full py-4 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-xl font-bold flex items-center justify-center transition">
+                      次へ <ArrowRight className="ml-2" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          };
+
+          const RenderPhase5 = () => {
+            const speak = useTextToSpeech();
+
+            useEffect(() => {
+              if (gameTask) {
+                if (gameTask.type === 'number_speech') speak(gameTask.data.text);
+                else speak(gameTask.data.en);
+              }
+            }, [gameTask, speak]);
+
+            const renderTask = () => {
+              if (!gameTask) return null;
+
+              if (gameTask.type === 'number_speech') {
+                const { isListening, message, startListening, errorCount } = useSpeechRecognition(gameTask.data.targets, handleGameTaskSuccess);
+                return (
+                  <div className="flex flex-col items-center w-full animate-in zoom-in-95 duration-300">
+                    <p className="text-lg text-gray-500 font-bold mb-2">英語で言ってみよう！</p>
+                    <p className="text-8xl font-black text-blue-600 mb-8">{gameTask.data.val}</p>
+                    <button onClick={startListening} className={`p-6 rounded-full shadow-lg ${isListening ? 'bg-red-500 animate-pulse' : 'bg-blue-500 hover:bg-blue-600'}`}>
+                      <Mic size={48} color="white" />
+                    </button>
+                    <p className="mt-4 text-gray-600 font-medium h-6">{message}</p>
+                    {errorCount >= 5 && <SkipButton onSkip={handleGameTaskSuccess} />}
+                  </div>
+                );
+              }
+
+              if (gameTask.type === 'routine_listen') {
+                return (
+                  <div className="flex flex-col items-center w-full animate-in zoom-in-95 duration-300">
+                    <p className="text-lg text-gray-500 font-bold mb-4">聞いて、正しい意味を選ぼう！</p>
+                    <button onClick={() => speak(gameTask.data.en)} className="p-6 bg-orange-100 text-orange-600 rounded-full shadow-md mb-4 hover:bg-orange-200">
+                      <Volume2 size={48} />
+                    </button>
+                    <p className="text-3xl font-black text-orange-600 mb-6 text-center">{gameTask.data.en}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
+                      {gameTask.options.map((opt, idx) => (
+                        <button key={idx} onClick={() => {
+                            if (opt.en === gameTask.data.en) handleGameTaskSuccess();
+                            else alert(`ざんねん！正解は「${gameTask.data.ja}」でした。`);
+                          }}
+                          className="py-3 px-4 border-2 border-orange-200 rounded-xl font-bold text-gray-700 hover:bg-orange-50 hover:border-orange-400 transition"
+                        >
+                          {opt.ja}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (gameTask.type === 'routine_speech' || gameTask.type === 'sentence_speech') {
+                const isSentence = gameTask.type === 'sentence_speech';
+                const themeColor = isSentence ? 'teal' : 'purple';
+                const { isListening, message, startListening, errorCount } = useSpeechRecognition(gameTask.data.targets || [gameTask.data.en], handleGameTaskSuccess);
+                
+                return (
+                  <div className="flex flex-col items-center w-full animate-in zoom-in-95 duration-300">
+                    <p className="text-lg text-gray-500 font-bold mb-2">英語で言ってみよう！</p>
+                    <p className={`text-2xl md:text-3xl font-bold text-${themeColor}-700 mb-2 text-center`}>{gameTask.data.ja}</p>
+                    <p className="text-xl text-gray-500 mb-8 text-center">({gameTask.data.en})</p>
+                    <button onClick={startListening} className={`p-6 rounded-full shadow-lg ${isListening ? 'bg-red-500 animate-pulse' : `bg-${themeColor}-500 hover:bg-${themeColor}-600`}`}>
+                      <Mic size={48} color="white" />
+                    </button>
+                    <p className="mt-4 text-gray-600 font-medium h-6 text-center">{message}</p>
+                    {errorCount >= 5 && <SkipButton onSkip={handleGameTaskSuccess} />}
+                  </div>
+                );
+              }
+            };
+
+            return (
+              <div className="flex flex-col lg:flex-row gap-6 max-w-5xl mx-auto">
+                <div className="flex-1 bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center">
+                  <div className="w-full flex justify-between items-center mb-6 pb-4 border-b-2 border-gray-100">
+                    <h2 className="text-2xl font-bold text-gray-800">エンドレスチャレンジ</h2>
+                    <div className="text-xl font-black text-indigo-600 bg-indigo-100 px-4 py-2 rounded-full">
+                      スコア: {gameScore}
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 w-full flex items-center justify-center py-8">
+                    {renderTask()}
+                  </div>
+                </div>
+
+                <div className="w-full lg:w-80 flex flex-col gap-6">
+                  <div className="bg-gradient-to-br from-yellow-100 to-yellow-300 p-6 rounded-2xl shadow-xl flex flex-col items-center text-center">
+                    <Gift size={48} className="text-yellow-600 mb-2" />
+                    <h3 className="text-xl font-bold text-yellow-800 mb-2">モンスターガチャ</h3>
+                    <p className="text-sm text-yellow-700 mb-4">5問正解するごとに1回引けるよ！</p>
+                    <div className="bg-white px-4 py-2 rounded-full font-bold text-lg text-gray-700 mb-4 shadow-inner">
+                      のこり: <span className="text-red-500 text-2xl">{availableTokens}</span> 回
+                    </div>
+                    
+                    {gachaPool.length === 0 ? (
+                      <p className="font-bold text-green-600 bg-green-100 px-4 py-2 rounded-full w-full">コンプリート！🎉</p>
+                    ) : (
+                      <button onClick={handleGacha} disabled={availableTokens <= 0 || isGachaRolling} className={`w-full py-3 rounded-xl font-bold text-lg shadow-md transition-transform ${availableTokens > 0 ? 'bg-yellow-500 hover:bg-yellow-600 text-white transform hover:scale-105' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>
+                        ガチャを回す！
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="bg-white p-4 rounded-2xl shadow-xl flex-1 flex flex-col">
+                    <h3 className="font-bold text-gray-700 mb-3 text-center border-b pb-2">あつめたモンスター ({collectedMonsters.length}/30)</h3>
+                    <div className="flex flex-wrap gap-2 overflow-y-auto max-h-60 justify-center pb-2">
+                      {collectedMonsters.map((monster, idx) => (
+                        <div key={idx} className="w-12 h-12 bg-gray-100 rounded-lg flex flex-col items-center justify-center shadow-inner transform hover:scale-125 transition-transform cursor-default group relative">
+                          <span className="text-2xl">{monster.emoji}</span>
+                          <div className="absolute -bottom-8 hidden group-hover:block bg-gray-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap z-10">
+                            {monster.name}
+                          </div>
+                        </div>
+                      ))}
+                      {Array.from({ length: 30 - collectedMonsters.length }).map((_, idx) => (
+                        <div key={`empty-${idx}`} className="w-12 h-12 bg-gray-50 rounded-lg flex items-center justify-center text-gray-300 text-sm border border-dashed border-gray-200">
+                          ?
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {showGachaModal && (
+                  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-3xl p-8 max-w-sm w-full flex flex-col items-center animate-in zoom-in duration-300">
+                      {isGachaRolling ? (
+                        <React.Fragment>
+                          <h2 className="text-2xl font-black text-yellow-500 mb-6 animate-pulse">ガチャを回しています...</h2>
+                          <div className="text-9xl mb-4 animate-spin">🎁</div>
+                          <p className="text-xl font-bold text-gray-500 mb-8">何が出るかな？</p>
+                        </React.Fragment>
+                      ) : currentGachaResult && (
+                        <React.Fragment>
+                          <h2 className="text-2xl font-black text-yellow-500 mb-6">モンスターゲット！</h2>
+                          <div className="text-9xl mb-4 animate-bounce">{currentGachaResult.emoji}</div>
+                          <p className="text-2xl font-bold text-gray-800 mb-8">{currentGachaResult.name}</p>
+                          <button onClick={() => { setShowGachaModal(false); setCurrentGachaResult(null); }} className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-bold text-lg transition">
+                            OK
+                          </button>
+                        </React.Fragment>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          };
+
+          return (
+            <div className="min-h-screen p-4 md:p-8">
+              <header className="max-w-5xl mx-auto mb-8 text-center">
+                <h1 className="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 drop-shadow-sm pb-2">
+                  English Daily Routine App
+                </h1>
+                <p className="mt-2 text-gray-500 font-medium">時間や日課をマスターしてモンスターを集めよう！</p>
+              </header>
+
+              <main>
+                {phase === 0 && (
+                  <div className="max-w-md mx-auto bg-white p-8 rounded-3xl shadow-2xl text-center flex flex-col items-center">
+                    <div className="mb-6 text-red-500 font-bold flex items-center justify-center bg-red-50 p-4 rounded-xl w-full border-2 border-red-200">
+                      <Volume2 className="mr-2" size={20} /> 音声を使ったアプリです。<br />イヤホンをつけてね！
+                    </div>
+                    <div className="text-6xl mb-6">🎒⏰</div>
+                    <h2 className="text-2xl font-bold text-gray-800 mb-6">準備はいいかな？</h2>
+                    <ul className="text-left text-gray-600 mb-8 space-y-3 font-medium bg-blue-50 p-6 rounded-xl w-full">
+                      <li className="flex items-center"><Mic className="text-blue-500 mr-3 w-6 text-center" /> ステップ1: 数字を言ってみよう</li>
+                      <li className="flex items-center"><Volume2 className="text-orange-500 mr-3 w-6 text-center" /> ステップ2: 英語を聞いて意味を選ぼう</li>
+                      <li className="flex items-center"><Mic className="text-purple-500 mr-3 w-6 text-center" /> ステップ3: 日課を英語で言ってみよう</li>
+                      <li className="flex items-center"><Clock className="text-teal-500 mr-3 w-6 text-center" /> ステップ4: 頻度や時間を言ってみよう</li>
+                      <li className="flex items-center"><Gift className="text-yellow-500 mr-3 w-6 text-center" /> ステップ5: ゲームに挑戦してガチャを回そう！</li>
+                    </ul>
+                    <button onClick={startPhase1} className="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-2xl text-2xl font-black shadow-lg transform transition hover:scale-105 flex items-center justify-center">
+                      <Play className="mr-3" /> スタート！
+                    </button>
+                  </div>
+                )}
+
+                {phase === 1 && <RenderPhase1 />}
+                {phase === 2 && <RenderPhase2 />}
+                {phase === 3 && <RenderPhase3 />}
+                {phase === 4 && <RenderPhase4 />}
+                {phase === 5 && <RenderPhase5 />}
+              </main>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
